@@ -1,0 +1,5 @@
+{
+  "load_image_path": "C:/Users/JUHO/Pictures/test_image/test_image1.png",
+  "kernel_size": 5,
+  "save_image_path": "C:/Users/JUHO/Pictures/test_image/result.jpg"
+}

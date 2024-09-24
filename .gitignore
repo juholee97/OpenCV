@@ -1,5 +1,5 @@
 # Ignore build directories
-build/
+build_Bluring/
 
 # Ignore CMake-generated files
 CMakeFiles/

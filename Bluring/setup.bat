@@ -1,0 +1,1 @@
+cmake -S ./ -B ../build_Bluring -G "Visual Studio 17 2022"
