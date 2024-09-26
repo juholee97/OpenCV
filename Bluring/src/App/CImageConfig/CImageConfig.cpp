@@ -1,9 +1,11 @@
 #include "CImageConfig.h"
 
+
 CImageConfig::CImageConfig( const nlohmann::json& configData )
-	:m_loadImagePath(configData[ "load_image_path" ].get<std::string>()),
-	m_saveImagePath(configData[ "save_image_path" ].get<std::string>()),
-	m_kernelSize(configData[ "kernel_size" ].get<int32_t>())
+	:m_loadImagePath( configData[ "load_image_path" ].get<std::string>() ),
+	m_saveImagePath( configData[ "save_image_path" ].get<std::string>() ),
+	m_kernel_width( configData[ "kernel_width" ].get<int32_t>() ),
+	m_kernel_height( configData[ "kernel_height" ].get<int32_t>() )
 {
 }
 
@@ -17,7 +19,12 @@ const std::string& CImageConfig::getSaveImagePath() const
 	return m_saveImagePath;
 }
 
-int32_t CImageConfig::getKernelSize() const
+const int32_t& CImageConfig::getKernelWidth() const
 {
-	return m_kernelSize;
+	return m_kernel_width;
+}
+
+const int32_t& CImageConfig::getKernelHeight() const
+{
+	return m_kernel_height;
 }

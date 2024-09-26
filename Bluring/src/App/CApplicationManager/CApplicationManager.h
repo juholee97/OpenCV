@@ -1,20 +1,31 @@
 #ifndef C_APPLICATION_MANAGER_H
 #define C_APPLICATION_MANAGER_H
 
-#include <opencv2/opencv.hpp>
-#include <iostream>
+#include <memory>
 #include <string>
+#include <cstdint>:
 #include <Windows.h>
+#include <opencv2/opencv.hpp>
 #include "CImageObject.h"
 #include "CImageConfig.h"
+#include "CLogger.h"
+
+
+using Width_t = int32_t;
+using Height_t = int32_t;
+using Kernel_Width_t = int32_t;
+using Kernel_Height_t = int32_t;
+using Buffer_t = const std::vector<uint8_t>&;
+using BlurDLLFunc_t = uint8_t* (*)( int32_t, int32_t, int32_t, int32_t, const uint8_t* );
+using FreeBlurDLLMemFunc_t = void (*)( uint8_t* );
+
 
 class CApplicationManager
 {
 public:
-	using BlurFunction = std::function<cv::Mat( const cv::Mat&, int32_t )>;
-	
+
 	static std::unique_ptr<CApplicationManager> makeInstance( const CImageConfig& conf )
-	{	
+	{
 		return std::unique_ptr<CApplicationManager>( new CApplicationManager( conf ) );
 	}
 
@@ -23,37 +34,35 @@ public:
 	CApplicationManager& operator=( const CApplicationManager& ) = delete;
 	CApplicationManager& operator=( CApplicationManager&& ) = delete;
 
+	~CApplicationManager() = default;
+
 	void run();
 
 private:
-	explicit CApplicationManager( const CImageConfig& conf )
-		: m_kernelSize( conf.getKernelSize() )
-		, m_savePath( conf.getSaveImagePath() )
-	{
-		m_imageObj = std::make_shared<CImageObject>( cv::imread( conf.getLoadImagePath(), cv::IMREAD_GRAYSCALE ) );
-		if ( m_imageObj->isEmpty() )
-		{
-			std::cerr << "Error: Could not open or find the image. ( " << MY_CONFIG_DIR << " )" << std::endl;
-		}
-	}
+	explicit CApplicationManager( const CImageConfig& conf );
 
 	void setOpenCVDLL();
 	void setCustomDLL();
-	void onTrackbarChange();
+	void blurringImage();
+
+	const int32_t m_kernel_width;
+	const int32_t m_kernel_height;
+	const std::string m_savePath;
 
 	const int32_t m_maxKernel { 31 };
 	const std::string m_windowName { "CApplicationManager" };
-	// DLL °ü·Ã ¸â¹ö
+
+	// DLL
 	HINSTANCE m_hCustomDll { nullptr };
 	HINSTANCE m_hOpenCVDll { nullptr };
+	BlurDLLFunc_t m_customBlurFunc { nullptr };
+	BlurDLLFunc_t m_opencvBlurFunc { nullptr };
+	FreeBlurDLLMemFunc_t m_customFreeFunc { nullptr };
+	FreeBlurDLLMemFunc_t m_opencvFreeFunc { nullptr };
 
 	std::shared_ptr<CImageObject> m_imageObj;
-	int32_t m_kernelSize;
-	const std::string m_savePath;
 
 	cv::Mat m_openCVBlurredImage;
 	cv::Mat m_customBlurredImage;
-	BlurFunction m_customBlurFunc;
-	BlurFunction m_opencvBlurFunc;
 };
 #endif /// C_APPLICATION_MANAGER_H

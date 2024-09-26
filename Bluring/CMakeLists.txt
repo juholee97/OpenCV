@@ -53,3 +53,7 @@ target_link_libraries(${M_TARGET_NAME} ${OpenCV_LIBS})
 
 set_property(TARGET ${M_TARGET_NAME} PROPERTY CXX_STANDARD 17 )
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/src PREFIX "src" FILES ${PROJECT_SOURCE_FILES})
+#add_custom_command(TARGET BluringApplication POST_BUILD
+#    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:BlurCustom> $<TARGET_FILE_DIR:BluringApplication>
+#    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:BlurOpenCV> $<TARGET_FILE_DIR:BluringApplication>
+#)

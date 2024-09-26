@@ -1,5 +1,17 @@
 #include "CApplicationManager.h"
-#include "CLogger.h"
+
+CApplicationManager::CApplicationManager( const CImageConfig& conf )
+	: m_kernel_width( conf.getKernelWidth() )
+	, m_kernel_height( conf.getKernelHeight() )
+	, m_savePath( conf.getSaveImagePath() )
+{
+	m_imageObj = std::make_shared<CImageObject>( cv::imread( conf.getLoadImagePath(), cv::IMREAD_GRAYSCALE ) );
+	if ( m_imageObj->isEmpty() )
+	{
+		BLUR_LOG( "Error: Could not open or find the image." );
+	}
+}
+
 
 void CApplicationManager::run()
 {
@@ -7,8 +19,7 @@ void CApplicationManager::run()
 	BLUR_LOG( "[APP] Application Start" );
 	cv::namedWindow( "OpenCV Blurred Image", cv::WINDOW_AUTOSIZE );
 	cv::namedWindow( "Custom Blurred Image", cv::WINDOW_AUTOSIZE );
-	cv::namedWindow( "Difference Image", cv::WINDOW_AUTOSIZE );
-	cv::createTrackbar( "Kernel Size", "OpenCV Blurred Image", &m_kernelSize, m_maxKernel );
+	cv::namedWindow( "Diff Compared Image(diff = RED pixel)", cv::WINDOW_AUTOSIZE );
 
 	if ( m_imageObj->getImage().channels() != 1 )
 	{
@@ -16,115 +27,146 @@ void CApplicationManager::run()
 		return;
 	}
 
-	/// 초기 블러링 수행
-	onTrackbarChange();
-	
-	/// TODO: 출력 확인용 코드이며, delete 필요.
-	cv::imshow( "Difference Image", m_imageObj->getImage() );  // 차이 이미지를 표시
+	setOpenCVDLL();
+	setCustomDLL();
 
-	/// TODO: 함수로 분리.
-	while ( true )
-	{
-		int key = cv::waitKey( 1 );
-		if ( key == 27 )	/// esc = break
-		{  
-			BLUR_LOG( "[APP] Program exiting." );
-			break;
-		}
-
-		if ( key == 's' && !m_savePath.empty() ) 
-		{  
-			cv::imwrite( m_savePath + "_opencv.jpg", m_openCVBlurredImage );
-			cv::imwrite( m_savePath + "_custom.jpg", m_customBlurredImage );
-			BLUR_LOG( "[APP] Blurred images saved." );
-		}
-	}
+	blurringImage();
+	cv::waitKey( 0 );
 }
 
 void CApplicationManager::setCustomDLL()
 {
-	m_hCustomDll = LoadLibrary( TEXT( "CustomBlur.dll" ) ); // 사용자 정의 DLL 로드
+	m_hCustomDll = LoadLibrary( TEXT( "BlurCustom" ) );
 	if ( m_hCustomDll )
 	{
-		// TODO: m_customBlurFunc 함수 포인터 링크
+		m_customBlurFunc = ( BlurDLLFunc_t )GetProcAddress( m_hCustomDll, "applyBlur" );
+		m_customFreeFunc = ( FreeBlurDLLMemFunc_t )GetProcAddress( m_hCustomDll, "freeBlurResult" );
 
-		if ( m_customBlurFunc ) 
+
+		if ( m_customBlurFunc )
 		{
 			BLUR_LOG( "[APP] Custom Blur function loaded successfully." );
 		}
-		else 
+		else
 		{
-			BLUR_LOG( "[APP] Failed to load custom Blur function." );
+			DWORD errorCode = GetLastError();
+			std::ostringstream oss;
+			oss << "[APP] Failed to load CustomBlur.dll's function Error code: " << errorCode;
+			BLUR_LOG( oss.str() );
 		}
 	}
 	else
 	{
-		BLUR_LOG( "[APP] Failed to load custom DLL." );
+		DWORD errorCode = GetLastError();
+		std::ostringstream oss;
+		oss << "[APP] Failed to load custom DLL. Error code: " << errorCode;
+		BLUR_LOG( oss.str() );
 	}
 }
 
 void CApplicationManager::setOpenCVDLL()
 {
-	m_hOpenCVDll = LoadLibrary( TEXT( "OpenCVBlur.dll" ) ); // OpenCV 기반 DLL 로드
+	m_hOpenCVDll = LoadLibrary( TEXT( "BlurOpenCV" ) ); 
 	if ( m_hOpenCVDll )
 	{
-		// TODO: m_opencvBlurFunc 함수 포인터 링크
+		m_opencvBlurFunc = ( BlurDLLFunc_t )GetProcAddress( m_hOpenCVDll, "applyBlur" );
+		m_opencvFreeFunc = ( FreeBlurDLLMemFunc_t )GetProcAddress( m_hOpenCVDll, "freeBlurResult" );
 
-		if ( m_opencvBlurFunc ) 
+		if ( m_opencvBlurFunc )
 		{
 			BLUR_LOG( "[APP] OpenCV Blur function loaded successfully." );
 		}
-		else 
+		else
 		{
-			BLUR_LOG( "[APP] Failed to load OpenCV Blur function." );
+			DWORD errorCode = GetLastError();
+			std::ostringstream oss;
+			oss << "[APP] Failed to load OpenCVBlur.dll's function . Error code: " << errorCode;
+			BLUR_LOG( oss.str() );
 		}
 	}
 	else
 	{
-		BLUR_LOG( "[APP] Failed to load OpenCV DLL." );
+		DWORD errorCode = GetLastError();
+		std::ostringstream oss;
+		oss << "[APP] Failed to load OpenCV DLL. Error code: " << errorCode;
+		BLUR_LOG( oss.str() );
 	}
 }
 
-void CApplicationManager::onTrackbarChange()
+void CApplicationManager::blurringImage()
 {
-	int32_t kernelSize = ( m_kernelSize % 2 == 1 ) ? m_kernelSize : m_kernelSize + 1;
-
-	if ( kernelSize > m_maxKernel ) 
-	{
-		kernelSize = m_maxKernel;
-	}
-
-	if ( m_imageObj->isEmpty() ) 
+	if ( m_imageObj->isEmpty() )
 	{
 		BLUR_LOG( "[APP] Error: Image is empty." );
 		return;
 	}
 
-	if ( m_opencvBlurFunc ) 
+	const int32_t width = m_imageObj->getWidth();
+	const int32_t height = m_imageObj->getHeight();
+	const std::vector<uint8_t>& buffer = m_imageObj->getBuffer();
+
+	if ( m_opencvBlurFunc )
 	{
-		m_openCVBlurredImage = m_opencvBlurFunc( m_imageObj->getImage(), kernelSize );
-		BLUR_LOG( "[APP] OpenCV Blur applied." );
+		uint8_t* opencvResult = m_opencvBlurFunc( width, height, m_kernel_width, m_kernel_height, buffer.data() );
+
+		if ( opencvResult == nullptr )
+		{
+			BLUR_LOG( "[APP] Error: OpenCV Blur function returned null." );
+			return;
+		}
+		cv::Mat tempOpenCVImage( height, width, CV_8UC1, opencvResult );
+		m_openCVBlurredImage = tempOpenCVImage.clone();
+
+		m_opencvFreeFunc( opencvResult );
+		BLUR_LOG( "[APP] OpenCV Blur DLL function complete." );
 	}
-	else 
+	else
 	{
 		BLUR_LOG( "[APP] Error: OpenCV Blur function not loaded." );
 		return;
 	}
 
-	if ( m_customBlurFunc ) 
+	if ( m_customBlurFunc )
 	{
-		m_customBlurredImage = m_customBlurFunc( m_imageObj->getImage(), kernelSize );
-		BLUR_LOG( "[APP] Custom Blur applied." );
+		uint8_t* customResult = m_customBlurFunc( width, height, m_kernel_width, m_kernel_height, buffer.data() );
+
+		if ( customResult == nullptr )
+		{
+			BLUR_LOG( "[APP] Error: Custom Blur function returned null." );
+			return;
+		}
+		cv::Mat tempCustomImage( height, width, CV_8UC1, customResult );
+		m_customBlurredImage = tempCustomImage.clone();
+
+		m_customFreeFunc( customResult );
+
+		BLUR_LOG( "[APP] Custom Blur DLL function complete." );
 	}
-	else 
+	else
 	{
 		BLUR_LOG( "[APP] Error: Custom Blur function not loaded." );
 		return;
 	}
 
-	/// TODO: Blurred 이미지 차이 계산함수 구현 후, compare 이미지 생성 필요
+	// compare
+	cv::Mat compareImage;
+	cv::Mat mask;
+	cv::absdiff( m_openCVBlurredImage, m_customBlurredImage, compareImage );
+	cv::threshold( compareImage, mask, 0, 255, cv::THRESH_BINARY );
+	cv::cvtColor( m_openCVBlurredImage, compareImage, cv::COLOR_GRAY2BGR );
+	compareImage.setTo( cv::Scalar( 0, 0, 255 ), mask );
+
 
 	cv::imshow( "OpenCV Blurred Image", m_openCVBlurredImage );
 	cv::imshow( "Custom Blurred Image", m_customBlurredImage );
-//	cv::imshow( "Difference Image", compare );  // 차이 이미지를 표시
+	cv::imshow( "Diff Compared Image(diff = RED pixel)", compareImage ); 
+
+	// save images
+	if ( !m_savePath.empty() )
+	{
+		cv::imwrite( m_savePath + "/OpenCVBlurredImage.png", m_openCVBlurredImage );
+		cv::imwrite( m_savePath + "/CustomBlurredImage.png", m_customBlurredImage );
+		cv::imwrite( m_savePath + "/DiffImage.png", compareImage );
+		BLUR_LOG( "[APP] Blurred images saved." );
+	}
 }

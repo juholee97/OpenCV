@@ -1,3 +1,6 @@
+#ifndef C_LOGGER_H
+#define C_LOGGER_H
+
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -36,7 +39,7 @@ public:
 
 	void log( const std::string& message )
 	{
-		m_logStream << getCurrentTime() << + " " << getTickTime() << " " << message << std::endl;
+		m_logStream << getCurrentTime() << " " << getTickTime() << " " << message << std::endl;
 	}
 
 private:
@@ -45,7 +48,7 @@ private:
 
 	std::filesystem::path getExecutablePath() const
 	{
-		return std::filesystem::current_path(); 
+		return std::filesystem::current_path();
 	}
 	std::string getCurrentTime() const
 	{
@@ -63,7 +66,7 @@ private:
 		return oss.str();
 	}
 
-	long long getTickTime() const
+	int64_t getTickTime() const
 	{
 		auto now = std::chrono::steady_clock::now();
 		auto elapsed = std::chrono::duration_cast< std::chrono::milliseconds >( now - m_startTime );
@@ -75,3 +78,5 @@ private:
 static CLogger g_logger;
 
 #define BLUR_LOG(message) g_logger.log(message)
+
+#endif /// C_LOGGER_H

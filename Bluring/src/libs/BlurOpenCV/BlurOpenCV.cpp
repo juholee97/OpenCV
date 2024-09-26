@@ -1,16 +1,29 @@
 #include <opencv2/opencv.hpp>
-#include <optional>
-#include <cstdint>
 #include <vector>
-#include <array>
+#include <cstring> // memcpy
+#include <memory>  // std::unique_ptr
 
-extern "C" __declspec( dllexport )
-void BlurOpenCV( int32_t width, int32_t height, int32_t kernelSize, std::vector<uint8_t> imageData, std::optional<int32_t> input_type )
+extern "C"
 {
-	int32_t image_type = input_type.value_or( CV_8UC3 );
-	// Load the input image
-	cv::Mat src { height, width, image_type, imageData.data() };
-	cv::Mat dst;
-	cv::blur( src, dst, cv::Size( kernelSize, kernelSize ) );
-	// TODO: 결과 어떻게 반환시킬지 구현.
+	__declspec( dllexport ) uint8_t* applyBlur( int32_t width, int32_t height, int32_t kernel_width, int32_t kernel_height, const uint8_t* buffer )
+	{
+		std::vector<uint8_t> copied_buffer( buffer, buffer + ( width * height ) );
+
+		cv::Mat inputImage( height, width, CV_8UC1, copied_buffer.data() );
+		cv::Mat outputImage;
+		/// default border type : BORDER_REFLECT_101
+		cv::blur( inputImage, outputImage, cv::Size( kernel_width, kernel_height ) );
+		std::vector<uint8_t> outputBuffer( outputImage.begin<uint8_t>(), outputImage.end<uint8_t>() );
+
+		size_t bufferSize = outputBuffer.size();
+		uint8_t* result = new uint8_t[ bufferSize ];
+		std::memcpy( result, outputBuffer.data(), bufferSize );
+
+		return result;
+	}
+
+	__declspec( dllexport ) void freeBlurResult( uint8_t* buffer )
+	{
+		delete[] buffer;
+	}
 }

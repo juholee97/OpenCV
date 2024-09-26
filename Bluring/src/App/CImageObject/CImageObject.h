@@ -3,6 +3,7 @@
 
 #include <opencv2/opencv.hpp>
 #include <vector>
+#include <cstdint>
 
 class CImageObject
 {
@@ -16,10 +17,17 @@ public:
 	CImageObject& operator=( CImageObject&& other ) = delete;
 
 	void showImage();
-	
+
 	void setImage( const cv::Mat& data );
+
 	cv::Mat getImage();
+	const int32_t& getWidth() const;
+	const int32_t& getHeight() const;
+	const int32_t& getImageType() const;
+	const std::vector<uint8_t>& getBuffer() const;
+
 	bool isEmpty() const;
+
 
 private:
 	// Mat(int rows, int cols, int type, void* data, size_t step=AUTO_STEP);
