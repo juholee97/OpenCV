@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5.0)
+cmake_minimum_required(VERSION 3.10)
 
 set(M_CURRENT_PROJECT BluringApplication) 
 set(M_TARGET_NAME Application) 

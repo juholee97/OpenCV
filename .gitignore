@@ -7,34 +7,3 @@ CMakeCache.txt
 cmake_install.cmake
 Makefile
 install_manifest.txt
-
-# Ignore executable files and binary objects
-*.exe
-*.out
-*.app
-*.o
-*.obj
-*.so
-*.a
-*.lib
-*.dll
-*.dylib
-
-# Ignore logs and user-specific files
-*.log
-*.user
-
-# Ignore IDE specific files
-.vscode/
-.idea/
-*.sln
-*.vcxproj*
-
-# Ignore generated configuration files
-compile_commands.json
-CTestTestfile.cmake
-Testing/
-
-# Ignore other system-specific files
-.DS_Store
-Thumbs.db
