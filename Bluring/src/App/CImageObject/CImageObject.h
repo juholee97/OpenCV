@@ -9,7 +9,7 @@ class CImageObject
 {
 public:
 	CImageObject() = delete;
-	explicit CImageObject( const cv::Mat& mat );
+	explicit CImageObject( const std::string&, const cv::Mat& mat );
 	~CImageObject() = default;
 	CImageObject( const CImageObject& other ) = delete;
 	CImageObject( CImageObject&& other ) = delete;
@@ -20,6 +20,7 @@ public:
 
 	void setImage( const cv::Mat& data );
 
+	const std::string& getImageName() const;
 	cv::Mat getImage();
 	const int32_t& getWidth() const;
 	const int32_t& getHeight() const;
@@ -31,9 +32,10 @@ public:
 
 private:
 	// Mat(int rows, int cols, int type, void* data, size_t step=AUTO_STEP);
+	const std::string m_imageName;
 	int32_t m_width;
 	int32_t m_height;
-	int32_t m_image_type;
+	int32_t m_imageType;
 	std::vector<uint8_t> m_buffer;
 };
 

@@ -3,27 +3,25 @@
 
 #include <memory>
 #include <string>
-#include <cstdint>:
+#include <cstdint>
 #include <Windows.h>
 #include <opencv2/opencv.hpp>
+#include <filesystem>
 #include "CImageObject.h"
 #include "CImageConfig.h"
 #include "CLogger.h"
-
 
 using Width_t = int32_t;
 using Height_t = int32_t;
 using Kernel_Width_t = int32_t;
 using Kernel_Height_t = int32_t;
 using Buffer_t = const std::vector<uint8_t>&;
-using BlurDLLFunc_t = uint8_t* (*)( int32_t, int32_t, int32_t, int32_t, const uint8_t* );
-using FreeBlurDLLMemFunc_t = void (*)( uint8_t* );
-
+using BlurDLLFunc_t = uint8_t * ( * )( int32_t, int32_t, int32_t, int32_t, const uint8_t* );
+using FreeBlurDLLMemFunc_t = void ( * )( uint8_t* );
 
 class CApplicationManager
 {
 public:
-
 	static std::unique_ptr<CApplicationManager> makeInstance( const CImageConfig& conf )
 	{
 		return std::unique_ptr<CApplicationManager>( new CApplicationManager( conf ) );
@@ -43,13 +41,16 @@ private:
 
 	void setOpenCVDLL();
 	void setCustomDLL();
-	void blurringImage();
+
+	void applyImageBlur( cv::Mat& lhs,
+						 const std::shared_ptr<const CImageObject>& rhs_Object,
+						 const std::pair<BlurDLLFunc_t, FreeBlurDLLMemFunc_t>& blurFunc ) const;
+
+	void compareImages( cv::Mat& comp_image, const cv::Mat& image1, const cv::Mat& image2 ) const;
 
 	const int32_t m_kernel_width;
 	const int32_t m_kernel_height;
 	const std::string m_savePath;
-
-	const int32_t m_maxKernel { 31 };
 	const std::string m_windowName { "CApplicationManager" };
 
 	// DLL
@@ -60,9 +61,7 @@ private:
 	FreeBlurDLLMemFunc_t m_customFreeFunc { nullptr };
 	FreeBlurDLLMemFunc_t m_opencvFreeFunc { nullptr };
 
-	std::shared_ptr<CImageObject> m_imageObj;
-
-	cv::Mat m_openCVBlurredImage;
-	cv::Mat m_customBlurredImage;
+	std::vector<std::shared_ptr<CImageObject>> m_imageObjs;
 };
+
 #endif /// C_APPLICATION_MANAGER_H

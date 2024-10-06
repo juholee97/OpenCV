@@ -1,6 +1,6 @@
 {
-  "load_image_path": "C:/Users/JUHO/Pictures/test_image/test_image1.png",
-  "save_image_path": "C:/Users/JUHO/Pictures/test_image",
-  "kernel_width": 11,
-  "kernel_height": 5
+  "load_image_path": "C:/Users/JUHO/Desktop/Dev/Git/OpenCV/image",
+  "save_image_path": "C:/Users/JUHO/Desktop/Dev/Git/OpenCV/image_blurred",
+  "kernel_width": 23,
+  "kernel_height": 23
 }

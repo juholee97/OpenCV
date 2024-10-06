@@ -1,37 +1,105 @@
 #include "CApplicationManager.h"
+#include <chrono> 
 
 CApplicationManager::CApplicationManager( const CImageConfig& conf )
 	: m_kernel_width( conf.getKernelWidth() )
 	, m_kernel_height( conf.getKernelHeight() )
 	, m_savePath( conf.getSaveImagePath() )
 {
-	m_imageObj = std::make_shared<CImageObject>( cv::imread( conf.getLoadImagePath(), cv::IMREAD_GRAYSCALE ) );
-	if ( m_imageObj->isEmpty() )
+	std::vector<std::string> imagePaths;
+
+	for ( const auto& entry : std::filesystem::directory_iterator( conf.getLoadImagePath() ) )
 	{
-		BLUR_LOG( "Error: Could not open or find the image." );
+		if ( entry.is_regular_file() )
+		{
+			std::string extension = entry.path().extension().string();
+			std::transform( extension.begin(), extension.end(), extension.begin(), ::tolower );
+
+			if ( extension == ".jpg" || extension == ".png" || extension == ".bmp" )
+			{
+				imagePaths.push_back( entry.path().string() );
+			}
+		}
+	}
+	if ( imagePaths.empty() )
+	{
+		BLUR_LOG( "Error: No images found in the specified directory." );
+		return;
+	}
+
+	for ( const auto& imagePath : imagePaths )
+	{
+		const std::string imageName = std::filesystem::path( imagePath ).filename().string();
+		auto imageObj = std::make_shared<CImageObject>( imageName, cv::imread( imagePath, cv::IMREAD_GRAYSCALE ) );
+		if ( imageObj->isEmpty() )
+		{
+			BLUR_LOG( "Error: Could not open or find the image: " + imagePath );
+		}
+		else
+		{
+			m_imageObjs.push_back( imageObj );
+		}
 	}
 }
 
-
 void CApplicationManager::run()
 {
-	/// application ½ÃÀÛ.
+	/// application start.
 	BLUR_LOG( "[APP] Application Start" );
-	cv::namedWindow( "OpenCV Blurred Image", cv::WINDOW_AUTOSIZE );
-	cv::namedWindow( "Custom Blurred Image", cv::WINDOW_AUTOSIZE );
 	cv::namedWindow( "Diff Compared Image(diff = RED pixel)", cv::WINDOW_AUTOSIZE );
-
-	if ( m_imageObj->getImage().channels() != 1 )
-	{
-		BLUR_LOG( "[APP] Error: Image is not 1 channel. Conversion is not possible." );
-		return;
-	}
 
 	setOpenCVDLL();
 	setCustomDLL();
 
-	blurringImage();
-	cv::waitKey( 0 );
+	for ( const auto& imageObj : m_imageObjs )
+	{
+		if ( imageObj->getImage().channels() != 1 )
+		{
+			BLUR_LOG( "[APP] Error: Image is not 1 channel. Conversion is not possible." );
+			continue;
+		}
+
+		// OpenCV blur
+		cv::Mat blurred_image1;
+		auto start_opencv = std::chrono::high_resolution_clock::now();
+		applyImageBlur( blurred_image1, imageObj, { m_opencvBlurFunc, m_opencvFreeFunc } );
+		auto end_opencv = std::chrono::high_resolution_clock::now();
+
+		// check processing time
+		std::chrono::duration<double, std::milli> opencv_duration = end_opencv - start_opencv;
+		BLUR_LOG( "[APP] OpenCV blur processing time: " + std::to_string( opencv_duration.count() ) + " ms" );
+
+		// Custom blur
+		cv::Mat blurred_image2;
+		auto start_custom = std::chrono::high_resolution_clock::now();
+		applyImageBlur( blurred_image2, imageObj, { m_customBlurFunc, m_customFreeFunc } );
+		auto end_custom = std::chrono::high_resolution_clock::now();
+
+		// check processing time
+		std::chrono::duration<double, std::milli> custom_duration = end_custom - start_custom;
+		BLUR_LOG( "[APP] Custom blur processing time: " + std::to_string( custom_duration.count() ) + " ms" );
+
+		// compare
+		cv::Mat comp_image;
+		compareImages( comp_image, blurred_image1, blurred_image2 );
+
+		// print compare
+		cv::imshow( "Diff Compared Image(diff = RED pixel)", comp_image );
+
+		// save images
+		if ( !m_savePath.empty() )
+		{
+			const std::string openCVPath = m_savePath + "/OpenCV_" + imageObj->getImageName();
+			const std::string customPath = m_savePath + "/Custom_" + imageObj->getImageName();
+			cv::imwrite( openCVPath, blurred_image1 );
+			cv::imwrite( customPath, blurred_image2 );
+			BLUR_LOG( "[APP] Blurred image " + imageObj->getImageName() + " saved." );
+		}
+
+		cv::waitKey( 0 );
+	}
+
+	cv::destroyAllWindows();
 }
 
 void CApplicationManager::setCustomDLL()
@@ -42,22 +110,21 @@ void CApplicationManager::setCustomDLL()
 		m_customBlurFunc = ( BlurDLLFunc_t )GetProcAddress( m_hCustomDll, "applyBlur" );
 		m_customFreeFunc = ( FreeBlurDLLMemFunc_t )GetProcAddress( m_hCustomDll, "freeBlurResult" );
 
-
 		if ( m_customBlurFunc )
 		{
 			BLUR_LOG( "[APP] Custom Blur function loaded successfully." );
 		}
 		else
 		{
-			DWORD errorCode = GetLastError();
+			const DWORD errorCode = GetLastError();
 			std::ostringstream oss;
-			oss << "[APP] Failed to load CustomBlur.dll's function Error code: " << errorCode;
+			oss << "[APP] Failed to load CustomBlur.dll's function. Error code: " << errorCode;
 			BLUR_LOG( oss.str() );
 		}
 	}
 	else
 	{
-		DWORD errorCode = GetLastError();
+		const DWORD errorCode = GetLastError();
 		std::ostringstream oss;
 		oss << "[APP] Failed to load custom DLL. Error code: " << errorCode;
 		BLUR_LOG( oss.str() );
@@ -66,7 +133,7 @@ void CApplicationManager::setCustomDLL()
 
 void CApplicationManager::setOpenCVDLL()
 {
-	m_hOpenCVDll = LoadLibrary( TEXT( "BlurOpenCV" ) ); 
+	m_hOpenCVDll = LoadLibrary( TEXT( "BlurOpenCV" ) );
 	if ( m_hOpenCVDll )
 	{
 		m_opencvBlurFunc = ( BlurDLLFunc_t )GetProcAddress( m_hOpenCVDll, "applyBlur" );
@@ -78,95 +145,111 @@ void CApplicationManager::setOpenCVDLL()
 		}
 		else
 		{
-			DWORD errorCode = GetLastError();
+			const DWORD errorCode = GetLastError();
 			std::ostringstream oss;
-			oss << "[APP] Failed to load OpenCVBlur.dll's function . Error code: " << errorCode;
+			oss << "[APP] Failed to load OpenCVBlur.dll's function. Error code: " << errorCode;
 			BLUR_LOG( oss.str() );
 		}
 	}
 	else
 	{
-		DWORD errorCode = GetLastError();
+		const DWORD errorCode = GetLastError();
 		std::ostringstream oss;
 		oss << "[APP] Failed to load OpenCV DLL. Error code: " << errorCode;
 		BLUR_LOG( oss.str() );
 	}
 }
 
-void CApplicationManager::blurringImage()
+void CApplicationManager::applyImageBlur( cv::Mat& lhs,
+										  const std::shared_ptr<const CImageObject>& rhs_Object,
+										  const std::pair<BlurDLLFunc_t, FreeBlurDLLMemFunc_t>& blurFunc ) const
 {
-	if ( m_imageObj->isEmpty() )
+	if ( rhs_Object->isEmpty() )
 	{
 		BLUR_LOG( "[APP] Error: Image is empty." );
 		return;
 	}
 
-	const int32_t width = m_imageObj->getWidth();
-	const int32_t height = m_imageObj->getHeight();
-	const std::vector<uint8_t>& buffer = m_imageObj->getBuffer();
+	const int32_t width = rhs_Object->getWidth();
+	const int32_t height = rhs_Object->getHeight();
+	const std::vector<uint8_t>& buffer = rhs_Object->getBuffer();
 
-	if ( m_opencvBlurFunc )
+	if ( blurFunc.first )
 	{
-		uint8_t* opencvResult = m_opencvBlurFunc( width, height, m_kernel_width, m_kernel_height, buffer.data() );
+		uint8_t* blurred_buffer = blurFunc.first( width, height, m_kernel_width, m_kernel_height, buffer.data() );
 
-		if ( opencvResult == nullptr )
+		if ( blurred_buffer == nullptr )
 		{
-			BLUR_LOG( "[APP] Error: OpenCV Blur function returned null." );
+			BLUR_LOG( "[APP] Error: Blur function returned null." );
 			return;
 		}
-		cv::Mat tempOpenCVImage( height, width, CV_8UC1, opencvResult );
-		m_openCVBlurredImage = tempOpenCVImage.clone();
 
-		m_opencvFreeFunc( opencvResult );
-		BLUR_LOG( "[APP] OpenCV Blur DLL function complete." );
+		lhs = cv::Mat( height, width, CV_8UC1, blurred_buffer ).clone();
+		blurFunc.second( blurred_buffer );
 	}
 	else
 	{
-		BLUR_LOG( "[APP] Error: OpenCV Blur function not loaded." );
+		BLUR_LOG( "[APP] Error: Blur function not loaded." );
+	}
+
+	return;
+}
+
+void CApplicationManager::compareImages( cv::Mat& comp_image, const cv::Mat& image1, const cv::Mat& image2 ) const
+{
+	// Check image is empty or have different sizes or type
+	if ( image1.empty() || image2.empty() )
+	{
+		BLUR_LOG( "[APP] Error: One or both images are empty." );
+		return;
+	}
+	if ( image1.size() != image2.size() || image1.type() != image2.type() )
+	{
+		BLUR_LOG( "[APP] Error: Images have different sizes or types." );
 		return;
 	}
 
-	if ( m_customBlurFunc )
-	{
-		uint8_t* customResult = m_customBlurFunc( width, height, m_kernel_width, m_kernel_height, buffer.data() );
-
-		if ( customResult == nullptr )
-		{
-			BLUR_LOG( "[APP] Error: Custom Blur function returned null." );
-			return;
-		}
-		cv::Mat tempCustomImage( height, width, CV_8UC1, customResult );
-		m_customBlurredImage = tempCustomImage.clone();
-
-		m_customFreeFunc( customResult );
-
-		BLUR_LOG( "[APP] Custom Blur DLL function complete." );
-	}
-	else
-	{
-		BLUR_LOG( "[APP] Error: Custom Blur function not loaded." );
-		return;
-	}
-
-	// compare
-	cv::Mat compareImage;
+	// Compare images
+	cv::Mat compResult;
 	cv::Mat mask;
-	cv::absdiff( m_openCVBlurredImage, m_customBlurredImage, compareImage );
-	cv::threshold( compareImage, mask, 0, 255, cv::THRESH_BINARY );
-	cv::cvtColor( m_openCVBlurredImage, compareImage, cv::COLOR_GRAY2BGR );
-	compareImage.setTo( cv::Scalar( 0, 0, 255 ), mask );
+	cv::absdiff( image1, image2, compResult );
+	cv::threshold( compResult, mask, 0, 255, cv::THRESH_BINARY );
+
+	const int32_t nonZeroCount = cv::countNonZero( mask );
+
+	// Convert differences red
+	cv::cvtColor( image1, compResult, cv::COLOR_GRAY2BGR );
+	compResult.setTo( cv::Scalar( 0, 0, 255 ), mask );
+
+	// Resize image size
+	const int32_t maxPrintWidth = 800;
+	const int32_t maxPrintHeight = 600;
+	cv::Mat resizedCompareImage;
+	cv::resize( compResult, resizedCompareImage, cv::Size( maxPrintWidth, maxPrintHeight ), 0, 0, cv::INTER_LINEAR );
+
+	// Prepare result text
+	const int32_t fontFace = cv::FONT_HERSHEY_SIMPLEX;
+	const double fontScale = 1.0;
+	const int32_t thickness = 2;
+	int32_t baseline = 0;
+
+	const std::string matchText = ( nonZeroCount == 0 ) ? "Match" : "Not Match (" + std::to_string( nonZeroCount ) + " pixels)";
+	const cv::Size textSize = cv::getTextSize( matchText, fontFace, fontScale, thickness, &baseline );
+
+	// Add additional space
+	const int32_t txtBoxHeight = textSize.height + baseline + 10;
+	comp_image = cv::Mat( resizedCompareImage.rows + txtBoxHeight, resizedCompareImage.cols, resizedCompareImage.type() );
+	resizedCompareImage.copyTo( comp_image( cv::Rect( 0, 0, resizedCompareImage.cols, resizedCompareImage.rows ) ) );
 
 
-	cv::imshow( "OpenCV Blurred Image", m_openCVBlurredImage );
-	cv::imshow( "Custom Blurred Image", m_customBlurredImage );
-	cv::imshow( "Diff Compared Image(diff = RED pixel)", compareImage ); 
+	// Add background and add text
+	cv::rectangle( comp_image,
+				   cv::Point( 0, resizedCompareImage.rows ),
+				   cv::Point( comp_image.cols, comp_image.rows ),
+				   cv::Scalar( 0, 0, 0 ), cv::FILLED );
 
-	// save images
-	if ( !m_savePath.empty() )
-	{
-		cv::imwrite( m_savePath + "/OpenCVBlurredImage.png", m_openCVBlurredImage );
-		cv::imwrite( m_savePath + "/CustomBlurredImage.png", m_customBlurredImage );
-		cv::imwrite( m_savePath + "/DiffImage.png", compareImage );
-		BLUR_LOG( "[APP] Blurred images saved." );
-	}
+	const cv::Point textOrg( ( comp_image.cols - textSize.width ) / 2, resizedCompareImage.rows + textSize.height + 5 );
+	cv::putText( comp_image, matchText, textOrg, fontFace, fontScale, cv::Scalar( 0, 255, 0 ), thickness );
+
+	return;
 }
