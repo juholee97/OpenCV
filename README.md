@@ -38,6 +38,8 @@ config.json 구조
 
 <h2>동작 성능</h2>
 
+테스트 : 첨부된 세 개의 이미지에 대해 100회 반복 시행하며 측정
+
 <h3>속도</h3>
 
 ![image](https://github.com/user-attachments/assets/30784cab-e8a5-449d-b4a4-52e157a390f9)
@@ -51,5 +53,6 @@ BlurCustom
 BlurOpenCV
 ![image](https://github.com/user-attachments/assets/b61a166a-f668-4a9b-a772-13a3eca1f9b5)
 
-BlurOpenCV의 메모리 사용량과 성능은 buffer ＞ copied_buffer ＞ inputImage ＞ outputImage ＞ blurred_buffer 순서로 동작하며 효율적이지 않게 측정된 것으로 보임．
+BlurOpenCV의 메모리 사용량과 성능은 buffer ＞ copied_buffer ＞ inputImage ＞ outputImage ＞ blurred_buffer 순서로 동작하며 효율적이지 않게 측정된 것으로 보이며
+이를 고려하여 비교했을 때, 두 함수의 성능은 비슷하거나 OpenCV의 Blur가 다소 성능우위일 것으로 보임
 
