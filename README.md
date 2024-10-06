@@ -19,7 +19,7 @@ config.json 과 exe file은 동일한 path에 위치.
 config.json 구조
 
 <code> {
-  "load_image_path": "image file name을 포함한 path",
+  "load_image_path": "image file이 위치한 path",
   "save_image_path": "image file을 저장할 path",
   "kernel_width": 자연수,
   "kernel_height": 자연수
@@ -28,21 +28,28 @@ config.json 구조
 
 <h2>결과</h2>
 
-총 3개의 windows가 나타남 ( OpenCV Blurred Image, Custom Blurred Image, Diff Compared Image(diff = RED pixel)
+총 １개의 windows가 나타남 ( Diff Compared Image(diff = RED pixel) ）
 
-
-<h3>blurring result windows</h3>
-
-![image](https://github.com/user-attachments/assets/01243959-d166-4277-9ce1-04cacc3b0d73)
-
-
-두 blur를 비교하여 다른 pixel은 붉게 표시.
+두 blur를 비교하여 다른 pixel은 붉게 표시하며，다른 이미지는 이미지 하단에 픽셀 수를 출력함．
 
 <h3>같은 case</h3>
+![image](https://github.com/user-attachments/assets/c6c55c16-79f5-4850-a0ba-a469dc4b11be)
 
-![image](https://github.com/user-attachments/assets/348677e0-99af-4294-95f0-966a9f176f4a)
 
+<h2>동작 성능</h2>
 
-<h3>다른 case</h3>
+<h3>속도</h3>
 
-![image](https://github.com/user-attachments/assets/968ab748-34ab-4ae6-b19d-6eb23c5120ad)
+![image](https://github.com/user-attachments/assets/30784cab-e8a5-449d-b4a4-52e157a390f9)
+BlurCustom (Separable Convolution로 구현)
+
+<h3>메모리 사용량</h3>
+
+BlurCustom 
+![image](https://github.com/user-attachments/assets/41eb3aca-1c3c-4222-b3cc-c68c6b900467)
+
+BlurOpenCV
+![image](https://github.com/user-attachments/assets/b61a166a-f668-4a9b-a772-13a3eca1f9b5)
+
+BlurOpenCV의 메모리 사용량과 성능은 buffer ＞ copied_buffer ＞ inputImage ＞ outputImage ＞ blurred_buffer 순서로 동작하며 효율적이지 않게 측정된 것으로 보임．
+
